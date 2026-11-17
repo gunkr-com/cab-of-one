@@ -1,0 +1,6 @@
+purpose = "Eval fixture: block sign-in for the fictional Contoso user u-1007."
+in_scope = "users/u-1007 account_enabled in the simulated tenant tenant/contoso.json"
+out_of_scope = "Every other field and object"
+timing = "No time constraint (fixture)"
+known_dependents = "Shared calendar access (fixture placeholder)"
+success_criteria = "A read of users/u-1007 shows account_enabled false (it starts true)"

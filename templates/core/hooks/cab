@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+"""cab: the runtime CLI of this cab-of-one project. Generated pinned copy.
+
+It imports only the pinned package next to this file (never the plugin or the current
+directory). setup apply must make this file executable.
+"""
+
+import sys
+
+try:
+    import os
+
+    sys.dont_write_bytecode = True
+    _HERE = os.path.dirname(os.path.realpath(__file__))
+    try:
+        _CWD = os.getcwd()
+    except OSError:
+        _CWD = ""
+    sys.path[:] = [p for p in sys.path if p not in ("", _CWD)]
+    sys.path.insert(0, _HERE)
+    from cab_of_one.runtime import cli  # noqa: E402
+except BaseException:
+    sys.stderr.write("cab: internal_error: the cab runtime could not start.\n")
+    raise SystemExit(5) from None
+raise SystemExit(cli.main(sys.argv[1:], entry=__file__))

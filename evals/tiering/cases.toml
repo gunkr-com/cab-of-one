@@ -1,0 +1,214 @@
+# Tier golden set G (DESIGN §6-2). Fictional Contoso data only.
+# Single source of truth: tests/test_tiering.py loads this file and runs every case.
+#
+# Evaluation per case:
+#   command = `command`, or `command_template` expanded once per member (see G03)
+#   r      = classify_tool_call("Bash", {"command": command}, policy=policy, read_file=<none>)
+#   floor  = tier_floor(r, policy)
+#   hit    = catalog_match(r, catalogs[catalog])
+#   tier   = decide_tier(answers, irreversible=irreversible, catalog_hit=hit, floor=floor)
+# target_count is the number of write commands (members) in the case; it is
+# checked against the classification and is never an input to the tier.
+#
+# simtenant commands use the real CLI grammar and immutable IDs from
+# simtenant/seed/contoso.json (u-1050, g-2017, mbx-1042, ...).
+
+schema = 1
+
+[policy.adapters]
+enabled = ["simtenant", "m365-powershell", "azure-cli", "graph-http"]
+
+[policy.tiers]
+critical_patterns = []          # core floor only; no case depends on a user pattern
+
+[policy.surfaces]
+mcp_write_servers = []
+
+[policy.classifier]
+trusted_simtenant_commands = ["simtenant"]   # fictional fixture only
+
+[catalogs]
+none = []
+
+[[catalogs.on]]
+id = "dl-member-add"
+enabled = true
+adapter = "simtenant"
+command_pattern = "simtenant add groups g-2017 --member *"
+target_scope = ["groups/g-2017"]      # non-privileged distribution list
+state_scope = "s.json"                # exact, project-relative
+
+[[catalogs.off]]
+id = "dl-member-add"
+enabled = false                 # generator default: proposals start disabled
+adapter = "simtenant"
+command_pattern = "simtenant add groups g-2017 --member *"
+target_scope = ["groups/g-2017"]
+state_scope = "s.json"
+
+[[catalogs.mislabelled]]
+id = "dl-member-add"
+enabled = true
+adapter = "simtenant"
+command_pattern = "simtenant add groups g-2017 --member *"
+target_scope = ["groups/g-2017"]
+state_scope = "s.json"
+
+[[catalogs.mislabelled]]
+id = "mislabelled-purge"        # a catalogue entry must not lower the purge floor
+enabled = true
+adapter = "simtenant"
+command_pattern = "simtenant purge users *"
+target_scope = ["users/u-1042"]
+state_scope = "s.json"
+
+[[case]]
+id = "G01"
+note = "allow-listed distribution list member add, catalogue entry enabled, all answers safe"
+command = "simtenant --state s.json add groups g-2017 --member u-1050"
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = false
+catalog = "on"
+target_count = 1
+expected = "standard"
+
+[[case]]
+id = "G02"
+note = "same as G01, catalogue entry disabled (default)"
+command = "simtenant --state s.json add groups g-2017 --member u-1050"
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = false
+catalog = "off"
+target_count = 1
+expected = "normal"
+
+[[case]]
+id = "G03"
+note = "500 real member-add commands in one call: count does not raise the tier"
+command_template = "simtenant --state s.json add groups g-2017 --member u-{n}"
+expand = { start = 3000, count = 500 }   # u-3000 .. u-3499, one command per line
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = false
+catalog = "on"
+target_count = 500
+expected = "standard"
+
+[[case]]
+id = "G04"
+note = "purge recorded as standard (safe answers, catalogue hit): core floor gives critical"
+command = "simtenant --state s.json purge users u-1042"
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = false
+catalog = "mislabelled"
+target_count = 1
+expected = "critical"
+
+[[case]]
+id = "G05"
+note = "remove from Finance Approvers, which a retention policy includes: dependents"
+command = "simtenant --state s.json remove groups g-2001 --member u-1042"
+answers = { reversible = true, has_dependents = true, targets_enumerated = true }
+irreversible = false
+catalog = "on"
+target_count = 1
+expected = "normal"
+
+[[case]]
+id = "G06"
+note = "turn off mailbox forwarding: outside the catalogue"
+command = "simtenant --state s.json set mailboxes mbx-1042 --field forwarding_smtp_address --value null"
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = false
+catalog = "on"
+target_count = 1
+expected = "normal"
+
+[[case]]
+id = "G07"
+note = "soft delete, restorable; not in the catalogue"
+command = "simtenant --state s.json delete users u-1042"
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = false
+catalog = "on"
+target_count = 1
+expected = "normal"
+
+[[case]]
+id = "G08"
+note = "plan marks the change irreversible"
+command = "simtenant --state s.json set users u-1142 --field department --value Marketing"
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = true
+catalog = "on"
+target_count = 1
+expected = "critical"
+
+[[case]]
+id = "G09"
+note = "targets not enumerated: blocked before tiering"
+command = "simtenant --state s.json add groups g-2017 --member u-1050"
+answers = { reversible = true, has_dependents = false, targets_enumerated = false }
+irreversible = false
+catalog = "on"
+target_count = 1
+expected = "blocked"
+
+[[case]]
+id = "G10"
+note = "user deletion cmdlet: core floor"
+command = "pwsh -NoProfile -Command 'Remove-MgUser -UserId u-1'"
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = false
+catalog = "none"
+target_count = 1
+expected = "critical"
+
+[[case]]
+id = "G11"
+note = "-WhatIf does not lower the classification"
+command = "pwsh -NoProfile -Command 'Set-Mailbox -Identity m-1 -ForwardingSmtpAddress fwd@contoso.example -WhatIf'"
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = false
+catalog = "none"
+target_count = 1
+expected = "normal"
+
+[[case]]
+id = "G12"
+note = "read piped into a write is a write"
+command = "pwsh -NoProfile -Command 'Get-MgUser -All | ForEach-Object { Update-MgUser -UserId $_.Id -Department Sales }'"
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = false
+catalog = "none"
+target_count = 1
+expected = "normal"
+
+[[case]]
+id = "G13"
+note = "DNS record deletion: core floor"
+command = "az network dns record-set a delete --resource-group rg-dns --zone-name contoso.example --name www --yes"
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = false
+catalog = "none"
+target_count = 1
+expected = "critical"
+
+[[case]]
+id = "G14"
+note = "Graph PATCH of a user attribute"
+command = """curl -sS -X PATCH https://graph.microsoft.com/v1.0/users/u-1 -H 'Content-Type: application/json' -d '{"department":"Sales"}'"""
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = false
+catalog = "none"
+target_count = 1
+expected = "normal"
+
+[[case]]
+id = "G15"
+note = "conditional access policy creation: core floor"
+command = "curl -sS -X POST https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies -H 'Content-Type: application/json' -d @ca.json"
+answers = { reversible = true, has_dependents = false, targets_enumerated = true }
+irreversible = false
+catalog = "none"
+target_count = 1
+expected = "critical"

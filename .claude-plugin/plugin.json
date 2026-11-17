@@ -1,0 +1,6 @@
+{
+  "name": "cab-of-one",
+  "description": "Interview-led generator that writes change control (risk tiers, adversarial review, human approval, verification, audit trail) into an IT operations project as hooks and deny rules.",
+  "license": "Apache-2.0",
+  "keywords": ["change-control", "it-operations", "hooks", "audit"]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "cab-of-one",
+  "owner": {
+    "name": "cab-of-one maintainers"
+  },
+  "plugins": [
+    {
+      "name": "cab-of-one",
+      "source": "./",
+      "description": "Interview-led generator for change control in IT operations projects."
+    }
+  ]
+}

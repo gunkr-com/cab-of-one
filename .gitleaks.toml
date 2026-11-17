@@ -1,0 +1,101 @@
+# gitleaks configuration for cab-of-one (written for gitleaks v8.30.1).
+#
+# It starts from the gitleaks default rules and adds no global allowlist. Each exception
+# below belongs to one default rule, names anchored test paths and lists the exact fictional
+# values that the redaction tests feed to the guard and ledger on purpose. condition AND
+# means the path and the exact value must both match. Review a change here like gate logic.
+
+title = "cab-of-one"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+  [[rules.allowlists]]
+  description = "Shared fictional sentinel constant in hook IO, obligation, event and terminal tests"
+  condition = "AND"
+  paths = [
+    '''(?:^|/)tests/test_hookio\.py$''',
+    '''(?:^|/)tests/test_obligations\.py$''',
+    '''(?:^|/)tests/test_hookevents\.py$''',
+    '''(?:^|/)tests/test_terminal\.py$''',
+  ]
+  regexes = ['''^sk-FICTIONAL-SECRET-0123456789$''']
+
+  [[rules.allowlists]]
+  description = "Second fictional sentinel in the hook event response hash test"
+  condition = "AND"
+  paths = ['''(?:^|/)tests/test_hookevents\.py$''']
+  regexes = ['''^sk-FICTIONAL-OTHER-9876543210$''']
+
+  [[rules.allowlists]]
+  description = "Fictional sentinel in the self-audit tests"
+  condition = "AND"
+  paths = ['''(?:^|/)tests/test_selfaudit\.py$''']
+  regexes = ['''^ContosoSENTINELsecret0042$''']
+
+  [[rules.allowlists]]
+  description = "Fictional sentinels in the ledger redaction tests"
+  condition = "AND"
+  paths = ['''(?:^|/)tests/test_ledger\.py$''']
+  regexes = [
+    '''^CamelSENTINELcs03$''',
+    '''^TokSENTINELat04$''',
+    '''^RowSENTINELpw09$''',
+    '''^CutSENTINELpw10$''',
+  ]
+
+  [[rules.allowlists]]
+  description = "Fictional sentinel in the S5 authority tests"
+  condition = "AND"
+  paths = ['''(?:^|/)tests/test_s5_authority\.py$''']
+  regexes = ['''^OtherPwSENTINELq1$''']
+
+  [[rules.allowlists]]
+  description = "Fictional sentinels in the guard redaction tests"
+  condition = "AND"
+  paths = ['''(?:^|/)tests/test_guard\.py$''']
+  regexes = [
+    '''^AcctKeySENTINELs2={0,2}$''',
+    '''^ConnPwSENTINELr1$''',
+    '''^SasKeySENTINELt3={0,1}$''',
+    '''^AwsSecSENTINELx7abc$''',
+    '''^LongCutSENTINELpw0$''',
+    '''^TailSENTINELpw1$''',
+  ]
+
+[[rules]]
+id = "jwt"
+
+  [[rules.allowlists]]
+  description = "Fictional unsigned JWT in the guard redaction tests"
+  condition = "AND"
+  paths = ['''(?:^|/)tests/test_guard\.py$''']
+  regexes = ['''^eyJhbGciOiJSUzI1NiJ9\.eyJzdWIiOiJTRU5USU5FTCJ9\.U0VOVElORUxzaWduYXR1cmU$''']
+
+[[rules]]
+id = "aws-access-token"
+
+  # This file repeats the value inside the exact regex below, so it is listed as a path too.
+  [[rules.allowlists]]
+  description = "Fictional AWS-format key ID in the guard redaction tests"
+  condition = "AND"
+  paths = [
+    '''(?:^|/)tests/test_guard\.py$''',
+    '''(?:^|/)\.gitleaks\.toml$''',
+  ]
+  regexes = ['''^AKIAQZXSENTINELWKJVR$''']
+
+[[rules]]
+id = "private-key"
+
+  # The default rule matches from the full fictional PEM case to the header of the truncated
+  # PEM case five lines later. The regex spells out that exact span; -{5} keeps this file
+  # from containing a key header itself.
+  [[rules.allowlists]]
+  description = "Fictional PEM bodies in the guard redaction tests"
+  condition = "AND"
+  paths = ['''(?:^|/)tests/test_guard\.py$''']
+  regexes = ['''^-{5}BEGIN PRIVATE KEY-{5}\\nPemFullSENTINELbody0\\n-{5}END PRIVATE KEY-{5}"',\n\s+\("PemFullSENTINELbody0",\),\n\s+\),\n\s+\(\n\s+"truncated pem",\n\s+'az x --key "-{5}BEGIN EC PRIVATE KEY-{5}$''']

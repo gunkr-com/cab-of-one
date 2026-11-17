@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+"""cab from a cab-of-one source checkout.
+
+``cab setup ...`` is dispatched lazily to the setup CLI when the checkout has one (S9);
+otherwise it is a fixed ``setup_unavailable`` error. Runtime commands need an installed
+project entry (``<project>/.claude/hooks/cab/cab``), so they exit 3 here. Imports come only
+from this checkout's ``src`` folder, never from the plugin root or the current directory.
+"""
+
+import sys
+
+try:
+    import os
+
+    sys.dont_write_bytecode = True
+    _ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    try:
+        _CWD = os.getcwd()
+    except OSError:
+        _CWD = ""
+    sys.path[:] = [p for p in sys.path if p not in ("", _CWD)]
+    sys.path.insert(0, os.path.join(_ROOT, "src"))
+    from cab_of_one.runtime import cli  # noqa: E402
+except BaseException:
+    sys.stderr.write("cab: internal_error: the cab source package could not be loaded.\n")
+    raise SystemExit(5) from None
+raise SystemExit(cli.source_main(sys.argv[1:], source_root=_ROOT, entry=__file__))

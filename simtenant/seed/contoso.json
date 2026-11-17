@@ -1,0 +1,260 @@
+{
+  "schema": "simtenant-seed/1",
+  "tenant": {
+    "name": "Contoso (fictional)",
+    "domain": "contoso.example",
+    "note": "Entirely fictional demo data for simtenant. No real people, tenants or services."
+  },
+  "objects": {
+    "users": [
+      {
+        "id": "u-1007",
+        "display_name": "Priya Natarajan",
+        "given_name": "Priya",
+        "surname": "Natarajan",
+        "user_principal_name": "priya.natarajan@contoso.example",
+        "mail": "priya.natarajan@contoso.example",
+        "department": "IT",
+        "job_title": "IT Operations Lead",
+        "account_enabled": true,
+        "usage_location": "US",
+        "manager_id": null
+      },
+      {
+        "id": "u-1015",
+        "display_name": "Sam Okafor",
+        "given_name": "Sam",
+        "surname": "Okafor",
+        "user_principal_name": "sam.okafor@contoso.example",
+        "mail": "sam.okafor@contoso.example",
+        "department": "Finance",
+        "job_title": "Accounts Payable Specialist",
+        "account_enabled": true,
+        "usage_location": "US",
+        "manager_id": "u-1023"
+      },
+      {
+        "id": "u-1023",
+        "display_name": "Lena Fischer",
+        "given_name": "Lena",
+        "surname": "Fischer",
+        "user_principal_name": "lena.fischer@contoso.example",
+        "mail": "lena.fischer@contoso.example",
+        "department": "Finance",
+        "job_title": "Finance Manager",
+        "account_enabled": true,
+        "usage_location": "DE",
+        "manager_id": null
+      },
+      {
+        "id": "u-1031",
+        "display_name": "Mateo Silva",
+        "given_name": "Mateo",
+        "surname": "Silva",
+        "user_principal_name": "mateo.silva@contoso.example",
+        "mail": "mateo.silva@contoso.example",
+        "department": "Sales",
+        "job_title": "Sales Director",
+        "account_enabled": true,
+        "usage_location": "US",
+        "manager_id": null
+      },
+      {
+        "id": "u-1042",
+        "display_name": "Jordan Reyes",
+        "given_name": "Jordan",
+        "surname": "Reyes",
+        "user_principal_name": "jordan.reyes@contoso.example",
+        "mail": "jordan.reyes@contoso.example",
+        "department": "Finance",
+        "job_title": "Financial Analyst",
+        "account_enabled": false,
+        "usage_location": "US",
+        "manager_id": "u-1023"
+      },
+      {
+        "id": "u-1050",
+        "display_name": "Ava Lindqvist",
+        "given_name": "Ava",
+        "surname": "Lindqvist",
+        "user_principal_name": "ava.lindqvist@contoso.example",
+        "mail": "ava.lindqvist@contoso.example",
+        "department": "Sales",
+        "job_title": "Sales Associate",
+        "account_enabled": true,
+        "usage_location": "SE",
+        "manager_id": "u-1031"
+      },
+      {
+        "id": "u-1142",
+        "display_name": "Jordan Reyes",
+        "given_name": "Jordan",
+        "surname": "Reyes",
+        "user_principal_name": "jordan.reyes2@contoso.example",
+        "mail": "jordan.reyes2@contoso.example",
+        "department": "Sales",
+        "job_title": "Account Executive",
+        "account_enabled": true,
+        "usage_location": "US",
+        "manager_id": "u-1031"
+      }
+    ],
+    "groups": [
+      {
+        "id": "g-2001",
+        "display_name": "Finance Approvers",
+        "description": "Approves supplier invoices above the payment threshold",
+        "mail_nickname": "finance-approvers",
+        "mail": null,
+        "group_type": "security",
+        "mail_enabled": false,
+        "security_enabled": true,
+        "members": ["u-1023", "u-1042"]
+      },
+      {
+        "id": "g-2005",
+        "display_name": "IT Admins",
+        "description": "Tenant administrators",
+        "mail_nickname": "it-admins",
+        "mail": null,
+        "group_type": "security",
+        "mail_enabled": false,
+        "security_enabled": true,
+        "members": ["u-1007"]
+      },
+      {
+        "id": "g-2010",
+        "display_name": "All Staff",
+        "description": "Everyone at Contoso",
+        "mail_nickname": "all-staff",
+        "mail": "all-staff@contoso.example",
+        "group_type": "microsoft365",
+        "mail_enabled": true,
+        "security_enabled": false,
+        "members": ["u-1007", "u-1015", "u-1023", "u-1031", "u-1042", "u-1050", "u-1142"]
+      },
+      {
+        "id": "g-2017",
+        "display_name": "Finance-Approvers",
+        "description": "Legacy mail list for invoice approval notices",
+        "mail_nickname": "finance-approvers-legacy",
+        "mail": "finance-approvers-legacy@contoso.example",
+        "group_type": "distribution",
+        "mail_enabled": true,
+        "security_enabled": false,
+        "members": ["u-1015"]
+      }
+    ],
+    "mailboxes": [
+      {
+        "id": "mbx-1007",
+        "display_name": "Priya Natarajan",
+        "owner_id": "u-1007",
+        "primary_smtp_address": "priya.natarajan@contoso.example",
+        "recipient_type": "user",
+        "forwarding_smtp_address": null,
+        "deliver_to_mailbox_and_forward": false,
+        "litigation_hold_enabled": false,
+        "archive_enabled": true,
+        "delegates": []
+      },
+      {
+        "id": "mbx-1042",
+        "display_name": "Jordan Reyes",
+        "owner_id": "u-1042",
+        "primary_smtp_address": "jordan.reyes@contoso.example",
+        "recipient_type": "user",
+        "forwarding_smtp_address": "jordan.reyes.home@example.net",
+        "deliver_to_mailbox_and_forward": false,
+        "litigation_hold_enabled": false,
+        "archive_enabled": true,
+        "delegates": ["u-1023"]
+      },
+      {
+        "id": "mbx-1142",
+        "display_name": "Jordan Reyes",
+        "owner_id": "u-1142",
+        "primary_smtp_address": "jordan.reyes2@contoso.example",
+        "recipient_type": "user",
+        "forwarding_smtp_address": null,
+        "deliver_to_mailbox_and_forward": false,
+        "litigation_hold_enabled": false,
+        "archive_enabled": false,
+        "delegates": []
+      },
+      {
+        "id": "mbx-3001",
+        "display_name": "Finance Shared",
+        "owner_id": null,
+        "primary_smtp_address": "finance@contoso.example",
+        "recipient_type": "shared",
+        "forwarding_smtp_address": null,
+        "deliver_to_mailbox_and_forward": false,
+        "litigation_hold_enabled": true,
+        "archive_enabled": false,
+        "delegates": ["u-1015", "u-1023"]
+      }
+    ],
+    "policies": [
+      {
+        "id": "pol-4001",
+        "display_name": "Require MFA for administrators",
+        "policy_type": "conditional_access",
+        "state": "enabled",
+        "description": "Administrators must complete multi-factor authentication",
+        "controls": ["require_mfa"],
+        "include": ["g-2005"]
+      },
+      {
+        "id": "pol-4002",
+        "display_name": "Block legacy authentication",
+        "policy_type": "conditional_access",
+        "state": "report_only",
+        "description": "Blocks sign-ins that use legacy authentication protocols",
+        "controls": ["block_access"],
+        "include": ["g-2010"]
+      },
+      {
+        "id": "pol-4003",
+        "display_name": "Finance mail retention 7 years",
+        "policy_type": "retention",
+        "state": "enabled",
+        "description": "Retains finance approver mail for seven years",
+        "controls": ["retain_7_years"],
+        "include": ["g-2001"]
+      },
+      {
+        "id": "pol-4004",
+        "display_name": "Block external auto-forwarding",
+        "policy_type": "transport_rule",
+        "state": "disabled",
+        "description": "Rejects automatic forwarding to external domains",
+        "controls": ["reject_external_forwarding"],
+        "include": ["g-2010"]
+      }
+    ],
+    "licenses": [
+      {
+        "id": "lic-5001",
+        "display_name": "Productivity Suite E3 (simulated)",
+        "sku_part_number": "SIM_E3",
+        "seats_total": 8,
+        "assigned_to": ["u-1007", "u-1015", "u-1023", "u-1031", "u-1042", "u-1050", "u-1142"]
+      },
+      {
+        "id": "lic-5002",
+        "display_name": "Security Add-on E5 (simulated)",
+        "sku_part_number": "SIM_E5_SECURITY",
+        "seats_total": 2,
+        "assigned_to": ["u-1007"]
+      },
+      {
+        "id": "lic-5003",
+        "display_name": "Diagram Tool (simulated)",
+        "sku_part_number": "SIM_DIAGRAM",
+        "seats_total": 1,
+        "assigned_to": []
+      }
+    ]
+  }
+}

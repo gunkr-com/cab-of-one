@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+"""cab-of-one pre-push gate. Opt-in: nothing installs it; see docs/releasing.md.
+
+It blocks the push unless every check passes:
+
+1. Only the checked-out HEAD commit is pushed (each pushed ref points at HEAD), branch and
+   tag deletions are refused, and the working tree is clean, so the working tree, HEAD and
+   the pushed objects are the same content.
+2. Identifier scan of the working tree and of every remote ref name being pushed, with the
+   generic rules and the private denylist at ``$HOME/.config/cab-of-one/denylist.txt``.
+   The hook passes only the path; the scanner reads the list and fails closed if it is
+   missing, empty, a symlink or inside the repo. Ref names are reported only by number.
+3. Identifier scan of every commit being pushed: ``<pushed sha> --not`` only the remote
+   SHAs that Git advertised for this push and that exist locally. Local remote-tracking
+   refs are never trusted. Each commit's tree, message, and an author/committer identity
+   that must be a GitHub noreply address are scanned.
+4. ``gitleaks git --redact`` over all local history including merge diffs
+   (``--log-opts=--all -m``) and ``gitleaks dir --redact`` over an export of exactly the
+   HEAD tree in a fresh temporary directory, both with this repository's ``.gitleaks.toml``
+   only. Inline allow comments are disabled with ``--ignore-gitleaks-allow``. gitleaks
+   always loads ``<root>/.gitleaksignore`` regardless of ``--gitleaks-ignore-path``, so the
+   hook refuses any root entry with that name (ignored, symlink or dangling) before any
+   scan, and the scanner refuses such files at any depth in the candidate and commits.
+   gitleaks must be on PATH.
+
+There is no bypass switch in this hook. Messages are fixed text; scanners print rule, path
+and line only.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+SHA = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
+ZERO = re.compile(r"0+")
+MAX_UPDATES = 32
+MAX_STDIN_BYTES = MAX_UPDATES * 1024
+MAX_COMMITS = 1000
+REVS_PER_SCAN = 200
+DENYLIST_PARTS = (".config", "cab-of-one", "denylist.txt")
+SUPPRESSION_NAME = ".gitleaksignore"
+
+
+class Blocked(Exception):
+    """A refusal with a fixed message."""
+
+
+@dataclass(frozen=True)
+class Update:
+    local_ref: str
+    local_sha: str
+    remote_ref: str
+    remote_sha: str
+
+
+def env() -> dict[str, str]:
+    """Hook GIT_* variables (GIT_DIR and friends) are not passed to child processes."""
+    out = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    out.update({"LC_ALL": "C", "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"})
+    return out
+
+
+def git(root: Path, *args: str) -> str:
+    exe = shutil.which("git")
+    if exe is None:
+        raise Blocked("git is not on PATH.")
+    proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [exe, "-c", "core.fsmonitor=false", "-C", str(root), *args],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        env=env(),
+        timeout=300,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise Blocked("a git command failed.")
+    return proc.stdout.decode("utf-8", "replace")
+
+
+def parse_updates(data: bytes) -> list[Update]:
+    """Parse pre-push stdin: '<local ref> <local sha> <remote ref> <remote sha>' per line."""
+    if len(data) > MAX_STDIN_BYTES:
+        raise Blocked("too many refs in one push.")
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise Blocked("unreadable push description from git.") from None
+    updates: list[Update] = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        fields = line.split(" ")
+        if len(fields) != 4:
+            raise Blocked("unreadable push description from git.")
+        local_ref, local_sha, remote_ref, remote_sha = fields
+        if not (SHA.fullmatch(local_sha) or ZERO.fullmatch(local_sha)):
+            raise Blocked("unreadable push description from git.")
+        if not (SHA.fullmatch(remote_sha) or ZERO.fullmatch(remote_sha)):
+            raise Blocked("unreadable push description from git.")
+        updates.append(Update(local_ref, local_sha, remote_ref, remote_sha))
+    if len(updates) > MAX_UPDATES:
+        raise Blocked("too many refs in one push.")
+    return updates
+
+
+def check_policy(updates: list[Update], head_sha: str) -> None:
+    for update in updates:
+        if ZERO.fullmatch(update.local_sha):
+            raise Blocked("deleting remote refs is outside this hook; it is refused.")
+        if update.local_sha != head_sha:
+            raise Blocked(
+                "push only the checked-out HEAD commit (e.g. git push <remote> HEAD:<branch>)."
+            )
+
+
+def pushed_commits(root: Path, updates: list[Update]) -> list[str]:
+    """Commits to scan. Only remote SHAs from the push lines are subtracted, never
+    local remote-tracking refs, which can be stale or point at commits the remote lacks."""
+    args = ["rev-list", f"--max-count={MAX_COMMITS + 1}"]
+    args += sorted({u.local_sha for u in updates})
+    args.append("--not")
+    for update in updates:
+        if not ZERO.fullmatch(update.remote_sha):
+            try:
+                git(root, "cat-file", "-e", update.remote_sha + "^{commit}")
+            except Blocked:
+                continue
+            args.append(update.remote_sha)
+    shas = [s for s in git(root, *args).split() if SHA.fullmatch(s)]
+    if len(shas) > MAX_COMMITS:
+        raise Blocked(f"more than {MAX_COMMITS} commits to scan in one push.")
+    return shas
+
+
+def run_step(argv: list[str], what: str) -> None:
+    print(f"pre-push: {what}", file=sys.stderr)
+    proc = subprocess.run(argv, env=env(), stdin=subprocess.DEVNULL, check=False)  # noqa: S603
+    if proc.returncode != 0:
+        raise Blocked(f"{what} did not pass.")
+
+
+def regular_file(path: Path) -> bool:
+    return path.is_file() and not path.is_symlink()
+
+
+def main(argv: list[str]) -> int:
+    if sys.version_info < (3, 11):
+        raise Blocked("Python 3.11 or newer is required.")
+    root = Path(os.path.realpath(git(Path.cwd(), "rev-parse", "--show-toplevel").strip()))
+    scanner = root / "scripts" / "check_identifiers.py"
+    config = root / ".gitleaks.toml"
+    if not regular_file(scanner) or not regular_file(config):
+        raise Blocked("scripts/check_identifiers.py or .gitleaks.toml is missing.")
+
+    updates = parse_updates(sys.stdin.buffer.read(MAX_STDIN_BYTES + 1))
+    if not updates:
+        return 0
+    head_sha = git(root, "rev-parse", "--verify", "HEAD^{commit}").strip()
+    check_policy(updates, head_sha)
+    if git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all"):
+        raise Blocked("the working tree is not clean; commit or remove changes first.")
+    # gitleaks always loads <root>/.gitleaksignore, even with --gitleaks-ignore-path, so an
+    # ignored, symlinked or dangling one would suppress findings. Refuse it; never read it.
+    if any(name.casefold() == SUPPRESSION_NAME for name in os.listdir(root)):
+        raise Blocked("a gitleaks suppression file (.gitleaksignore) is in the work tree root.")
+
+    home = os.environ.get("HOME", "")
+    if not home or not os.path.isabs(home):
+        raise Blocked("HOME is not set to an absolute path.")
+    denylist = str(Path(home).joinpath(*DENYLIST_PARTS))
+    gitleaks = shutil.which("gitleaks")
+    if gitleaks is None:
+        raise Blocked("the gitleaks executable is required on PATH.")
+
+    commits = pushed_commits(root, updates)
+    python = [sys.executable, "-I", str(scanner), "--root", str(root)]
+    refs = [f"--ref={u.remote_ref}" for u in updates]
+    run_step(
+        [*python, "--denylist", denylist, *refs],
+        "identifier scan (working tree and pushed ref names, private)",
+    )
+    for start in range(0, len(commits), REVS_PER_SCAN):
+        revs: list[str] = []
+        for sha in commits[start : start + REVS_PER_SCAN]:
+            revs += ["--rev", sha]
+        run_step(
+            [*python, "--denylist", denylist, "--check-commit-metadata", *revs],
+            "identifier scan (pushed commits, private)",
+        )
+    # Only .gitleaks.toml exceptions apply: inline allow comments and ignore files are off.
+    leak_opts = ["--redact", "--verbose", "--no-banner", "--config", str(config),
+                 "--ignore-gitleaks-allow", "--gitleaks-ignore-path", os.devnull]  # fmt: skip
+    run_step(
+        [gitleaks, "git", *leak_opts, "--log-opts=--all -m", str(root)],
+        "gitleaks history scan",
+    )
+    with tempfile.TemporaryDirectory(prefix="cab-candidate-") as tmp:
+        candidate = os.path.join(tmp, "candidate")
+        run_step([*python, "--rev", head_sha, "--export", candidate], "candidate export")
+        run_step([gitleaks, "dir", *leak_opts, candidate], "gitleaks candidate scan")
+    print("pre-push: all checks passed", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv))
+    except Blocked as exc:
+        print(f"pre-push: blocked: {exc}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as exc:  # noqa: BLE001 - fail closed without a traceback
+        print(f"pre-push: blocked: internal error ({type(exc).__name__}).", file=sys.stderr)
+        sys.exit(1)

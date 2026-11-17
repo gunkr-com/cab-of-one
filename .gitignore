@@ -1,0 +1,10 @@
+/.local/
+/.build-inputs/
+/AGENTS.md
+/CLAUDE.md
+/.claude/settings.local.json
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/

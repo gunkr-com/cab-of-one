@@ -1,0 +1,125 @@
+# cab-of-one CI. Public checks only: no secrets, no model or tenant calls, no artifacts.
+# The private denylist is never read here (the scanner also refuses it under GITHUB_ACTIONS).
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install test tools
+        run: python -m pip install --disable-pip-version-check "pytest>=7" ruff
+      - name: Lint
+        run: python -m ruff check .
+      - name: Format
+        run: python -m ruff format --check .
+      - name: Tests
+        run: python -m pytest -q
+
+  identifiers:
+    name: identifier scan (generic rules)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - name: Scan the checked-out candidate
+        run: python -I scripts/check_identifiers.py
+
+  gitleaks:
+    name: gitleaks (history and candidate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - name: Install gitleaks 8.30.1 (SHA-256 verified before extraction)
+        shell: bash
+        env:
+          GITLEAKS_URL: https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/gitleaks-bin"
+          mkdir -p "$dir"
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            --output "$dir/gitleaks.tar.gz" "$GITLEAKS_URL"
+          echo "$GITLEAKS_SHA256  $dir/gitleaks.tar.gz" | sha256sum --check --strict -
+          tar -xzf "$dir/gitleaks.tar.gz" -C "$dir" gitleaks
+          rm "$dir/gitleaks.tar.gz"
+          "$dir/gitleaks" version
+          echo "$dir" >> "$GITHUB_PATH"
+      # gitleaks always loads <source>/.gitleaksignore, even with --gitleaks-ignore-path, so
+      # refuse any root entry of that name (any case or type) before any gitleaks run. The
+      # export below also refuses such files at any depth and the root one.
+      - name: Refuse gitleaks suppression files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$(find . -maxdepth 1 -iname .gitleaksignore -print -quit)" ]; then
+            echo "gitleaks suppression file present at the work tree root" >&2
+            exit 1
+          fi
+      - name: Export the publication candidate (Git-enumerated files only)
+        run: python -I scripts/check_identifiers.py --export "$RUNNER_TEMP/candidate"
+      # Only .gitleaks.toml exceptions apply; inline allow comments are disabled.
+      - name: gitleaks history (all fetched refs and merge diffs, redacted)
+        run: >-
+          gitleaks git --redact --verbose --no-banner --config .gitleaks.toml
+          --ignore-gitleaks-allow --gitleaks-ignore-path /dev/null
+          --log-opts="--all -m" .
+      - name: gitleaks candidate directory (redacted)
+        run: >-
+          gitleaks dir --redact --verbose --no-banner --config .gitleaks.toml
+          --ignore-gitleaks-allow --gitleaks-ignore-path /dev/null
+          "$RUNNER_TEMP/candidate"
+
+  dco:
+    name: DCO sign-off
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      # Event data reaches the script only through env; check_dco.py accepts hex IDs only.
+      # Initial push or new branch (before = 000...0): every reachable commit is checked.
+      - name: Check sign-off on new commits
+        env:
+          DCO_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          DCO_HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: python -I scripts/check_dco.py

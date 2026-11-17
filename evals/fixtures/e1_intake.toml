@@ -1,0 +1,6 @@
+purpose = "Eval fixture: remove the departed fictional Contoso user u-1042 permanently."
+in_scope = "users/u-1042 in the simulated tenant tenant/contoso.json"
+out_of_scope = "Every other user, group, mailbox, policy and licence"
+timing = "No time constraint (fixture)"
+known_dependents = "None recorded (fixture)"
+success_criteria = "A read of users/u-1042 finds nothing"

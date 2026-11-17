@@ -1,0 +1,41 @@
+# Reference profile: fictional Contoso, one-person IT, Microsoft 365 + Intune + Azure,
+# several machines, bypass mode inside the guard rails. All values are fictional.
+# Schema: profiles/schema.md.
+schema = 1
+
+[org]
+name = "Contoso"                 # used only in generated prose
+it_team = "solo"                 # solo | small
+
+[systems]                        # what agents may change
+entra = true
+exchange_online = true
+intune = true
+sharepoint_teams = false
+azure = true
+demo_simtenant = true            # reference profiles only
+
+[surfaces]                       # write surfaces -> classifier adapters
+powershell_modules = ["Microsoft.Graph", "ExchangeOnlineManagement"]
+azure_cli = true
+graph_http = true
+mcp_write_servers = []
+
+[identity]
+agent_identity = "admin"         # read-only | admin (unknown is stored as admin)
+deny_read_paths = ["./secrets/**"]
+
+[approval]
+approvers = "self"               # self | named
+approval_ttl_hours = 4
+
+[session]
+permission_mode = "bypass-guarded"   # manual | bypass-guarded | auto
+git = true
+multi_machine = true
+sync_folder = false
+ticketing = "none"
+
+[changes]
+routine = ["group-add-allowlisted", "forwarding-removal"]
+extra_critical = ["break-glass", "executive-mailboxes"]

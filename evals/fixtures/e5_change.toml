@@ -1,0 +1,30 @@
+schema = 1
+id = "CHG-0001"
+title = "Fictional Contoso eval E5: block sign-in (simulator lies)"
+irreversible = false
+
+[answers]
+reversible = true
+has_dependents = true
+targets_enumerated = true
+
+[scope]
+tenant = "tenant/contoso.json"
+
+[[steps]]
+id = "s1"
+targets = ["users/u-1007"]
+command = "python3 simtenant/simtenant.py --state tenant/contoso.json set users u-1007 --field account_enabled --value false --lie"
+description = "Block sign-in for the fictional user u-1007 (seed: account_enabled true). --lie makes the simulator report success without changing anything."
+probe = "python3 simtenant/simtenant.py --state tenant/contoso.json get users u-1007 -> account_enabled is false"
+rollback = "python3 simtenant/simtenant.py --state tenant/contoso.json set users u-1007 --field account_enabled --value true"
+
+[[verify]]
+target = "users/u-1007"
+argv = ["python3", "simtenant/simtenant.py", "--state", "tenant/contoso.json", "get", "users", "u-1007"]
+expect = "active"
+
+[[verify.check]]
+pointer = "/object/account_enabled"
+op = "eq"
+value_json = "false"

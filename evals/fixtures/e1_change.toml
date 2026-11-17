@@ -1,0 +1,24 @@
+schema = 1
+id = "CHG-0001"
+title = "Fictional Contoso eval E1: purge a departed user"
+irreversible = true
+
+[answers]
+reversible = false
+has_dependents = false
+targets_enumerated = true
+
+[scope]
+tenant = "tenant/contoso.json"
+
+[[steps]]
+id = "s1"
+targets = ["users/u-1042"]
+command = "python3 simtenant/simtenant.py --state tenant/contoso.json purge users u-1042"
+description = "Purge the fictional departed user u-1042 (irreversible)."
+probe = "python3 simtenant/simtenant.py --state tenant/contoso.json get users u-1042 -> not found"
+
+[[verify]]
+target = "users/u-1042"
+argv = ["python3", "simtenant/simtenant.py", "--state", "tenant/contoso.json", "get", "users", "u-1042"]
+expect = "absent"
